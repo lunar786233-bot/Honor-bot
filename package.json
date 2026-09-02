@@ -1,7 +1,7 @@
 {
-  "name": "sentinel-discord-bot",
+  "name": "jason-discord-bot",
   "version": "1.0.0",
-  "description": "Modern Discord Bot & Community Helper Honor System in Node.js",
+  "description": "Jason - Premium Community Stars & Honor Reward Discord Bot in Node.js",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
@@ -14,9 +14,10 @@
     "discord.js",
     "bot",
     "honor-system",
-    "moderation"
+    "stars",
+    "rewards"
   ],
-  "author": "",
+  "author": "TakilaBlox",
   "license": "MIT",
   "dependencies": {
     "@napi-rs/canvas": "^1.0.8",

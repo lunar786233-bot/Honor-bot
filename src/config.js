@@ -16,7 +16,7 @@ module.exports = {
   developerId: '1288801215282413644',
   allowedGuilds: configuredGuilds,
   dbPath: path.resolve(__dirname, '../data/bot_data.db'),
-  botName: 'Community Stars Bot',
+  botName: 'Jason',
   botVersion: '1.0.0',
   colors: {
     primary: 0x5865F2, // Discord Blurple
