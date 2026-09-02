@@ -1,3 +1,11 @@
+const nodeCrypto = require('crypto');
+if (!globalThis.crypto) {
+  globalThis.crypto = nodeCrypto.webcrypto || nodeCrypto;
+}
+if (!global.crypto) {
+  global.crypto = nodeCrypto;
+}
+
 const dns = require('dns');
 // Set public DNS servers to guarantee flawless SRV resolution on Windows
 try {
@@ -57,7 +65,7 @@ class MongoDBManager {
     await HonorConfig.findOneAndUpdate(
       { guild_id: String(guildId) },
       { $set: update },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   }
 
@@ -70,7 +78,7 @@ class MongoDBManager {
           live_leaderboard_message_id: messageId ? String(messageId) : null
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   }
 
@@ -190,7 +198,7 @@ class MongoDBManager {
     await MilestoneRole.findOneAndUpdate(
       { guild_id: String(guildId), tier: Number(tier) },
       { $set: { min_stars: Number(minStars), role_id: String(roleId) } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   }
 

@@ -1,3 +1,11 @@
+const nodeCrypto = require('crypto');
+if (!globalThis.crypto) {
+  globalThis.crypto = nodeCrypto.webcrypto || nodeCrypto;
+}
+if (!global.crypto) {
+  global.crypto = nodeCrypto;
+}
+
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
