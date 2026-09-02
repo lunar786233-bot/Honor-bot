@@ -5,6 +5,24 @@ const { buildLiveLeaderboardPayload } = require('../services/liveLeaderboard');
 module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction, db) {
+    // 0. Server Whitelist Security Check
+    if (interaction.guildId && config.allowedGuilds && config.allowedGuilds.length > 0) {
+      if (!config.allowedGuilds.includes(interaction.guildId)) {
+        const unauthorizedEmbed = new EmbedBuilder()
+          .setTitle('⛔ Unauthorized Server')
+          .setDescription(
+            `This bot is proprietary and only authorized to run in designated community servers.\n\n` +
+            `💬 For authorization or inquiries, contact the developer: <@${config.developerId}>.`
+          )
+          .setColor(config.colors.error);
+
+        return interaction.reply({
+          embeds: [unauthorizedEmbed],
+          flags: [MessageFlags.Ephemeral]
+        }).catch(() => null);
+      }
+    }
+
     // 1. Handle Button Interactions
     if (interaction.isButton()) {
       if (interaction.customId === 'live_lb_manual_refresh') {

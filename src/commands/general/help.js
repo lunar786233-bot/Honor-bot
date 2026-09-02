@@ -1,4 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} = require('discord.js');
+const config = require('../../config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -38,6 +45,7 @@ module.exports = {
         {
           name: '⚙️ Admin Management Commands',
           value:
+            '• `/live-leaderboard` — Set up 1-minute auto-refreshing Top 10 Live Leaderboard embed.\n' +
             '• `/star-roles set/view/remove` — Configure monthly milestone roles.\n' +
             '• `/star-config set/view` — Configure announcement channel and cooldowns.\n' +
             '• `/post-celebration` — Generate & send graphic leaderboard image card.\n' +
@@ -50,6 +58,14 @@ module.exports = {
       .setFooter({ text: `${interaction.guild.name} • Community Stars System` })
       .setTimestamp();
 
-    await interaction.editReply({ embeds: [embed] });
+    // Developer Support Button
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('💬 Developer Support')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://discord.com/users/${config.developerId || '1288801215282413644'}`)
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [row] });
   }
 };

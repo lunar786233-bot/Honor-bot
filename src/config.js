@@ -4,10 +4,17 @@ const dotenv = require('dotenv');
 // Load .env
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+const defaultGuilds = ['1544347574109208639'];
+const configuredGuilds = process.env.ALLOWED_GUILDS
+  ? process.env.ALLOWED_GUILDS.split(',').map(s => s.trim()).filter(Boolean)
+  : (process.env.GUILD_ID ? [process.env.GUILD_ID] : defaultGuilds);
+
 module.exports = {
   token: process.env.DISCORD_TOKEN || '',
   clientId: process.env.CLIENT_ID || '',
   guildId: process.env.GUILD_ID || '',
+  developerId: '1288801215282413644',
+  allowedGuilds: configuredGuilds,
   dbPath: path.resolve(__dirname, '../data/bot_data.db'),
   botName: 'Community Stars Bot',
   botVersion: '1.0.0',
