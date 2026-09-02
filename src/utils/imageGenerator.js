@@ -1,4 +1,21 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const path = require('path');
+const fs = require('fs');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+
+// Register bundled fonts for guaranteed cross-platform font rendering
+const fontRegularPath = path.join(__dirname, '../assets/fonts/arial.ttf');
+const fontBoldPath = path.join(__dirname, '../assets/fonts/arialbd.ttf');
+
+try {
+  if (fs.existsSync(fontRegularPath)) {
+    GlobalFonts.registerFromPath(fontRegularPath, 'CardFont');
+  }
+  if (fs.existsSync(fontBoldPath)) {
+    GlobalFonts.registerFromPath(fontBoldPath, 'CardFontBold');
+  }
+} catch (e) {
+  console.warn('Could not register custom font:', e.message);
+}
 
 /**
  * Draws a rounded rectangle path.
@@ -15,6 +32,36 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.lineTo(x, y + radius);
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
+}
+
+/**
+ * Draws a glowing vector 5-point Star.
+ */
+function drawStar(ctx, cx, cy, spikes = 5, outerRadius = 10, innerRadius = 5, color = '#FFD700') {
+  let rot = (Math.PI / 2) * 3;
+  let x = cx;
+  let y = cy;
+  const step = Math.PI / spikes;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - outerRadius);
+  for (let i = 0; i < spikes; i++) {
+    x = cx + Math.cos(rot) * outerRadius;
+    y = cy + Math.sin(rot) * outerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+
+    x = cx + Math.cos(rot) * innerRadius;
+    y = cy + Math.sin(rot) * innerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+  }
+  ctx.lineTo(cx, cy - outerRadius);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
 }
 
 /**
@@ -36,7 +83,7 @@ async function safeLoadImage(url) {
  * Generates a graphic Celebration / Leaderboard Card.
  */
 async function generateCelebrationCard({
-  title = '🌟 COMMUNITY STAR CHAMPIONS',
+  title = 'COMMUNITY STAR CHAMPIONS',
   subtitle = 'Celebrating our most helpful members!',
   guildName = 'Discord Server',
   guildIconUrl = null,
@@ -46,6 +93,9 @@ async function generateCelebrationCard({
   const height = 540;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
+
+  // Clean title
+  const cleanTitle = title.replace(/[🌟👑🏆✨⭐]/g, '').trim();
 
   // 1. Dark Modern Background with Gradients
   const bgGrad = ctx.createLinearGradient(0, 0, width, height);
@@ -94,38 +144,42 @@ async function generateCelebrationCard({
     headerX = 105;
   }
 
+  // Draw header star icon
+  drawStar(ctx, headerX + 12, 54, 5, 12, 6, '#FFD700');
+
   ctx.fillStyle = '#FFD700';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.fillText(title, headerX, 52);
+  ctx.font = 'bold 24px CardFontBold, CardFont, Arial, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(cleanTitle, headerX + 32, 62);
 
   ctx.fillStyle = '#A0A4B8';
-  ctx.font = '14px sans-serif';
-  ctx.fillText(`${guildName} • ${subtitle}`, headerX, 74);
+  ctx.font = '14px CardFont, Arial, sans-serif';
+  ctx.fillText(`${guildName} • ${subtitle.replace(/[🌟👑🏆✨⭐]/g, '').trim()}`, headerX, 84);
 
   // Header separator line
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(40, 100);
-  ctx.lineTo(width - 40, 100);
+  ctx.moveTo(40, 105);
+  ctx.lineTo(width - 40, 105);
   ctx.stroke();
 
   // 3. Main Content
   if (topUsers.length === 0) {
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 22px sans-serif';
+    ctx.font = 'bold 22px CardFontBold, CardFont, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('✨ No stars recorded yet for this period! ✨', width / 2, height / 2);
+    ctx.fillText('No stars recorded yet for this period!', width / 2, height / 2);
     ctx.fillStyle = '#8E9297';
-    ctx.font = '16px sans-serif';
+    ctx.font = '16px CardFont, Arial, sans-serif';
     ctx.fillText('Help fellow members and use /thank to appear on this board!', width / 2, height / 2 + 35);
   } else {
     // Left: Spotlight #1 Champion
     const champion = topUsers[0];
     const cardX = 40;
-    const cardY = 120;
+    const cardY = 125;
     const cardW = 380;
-    const cardH = 360;
+    const cardH = 355;
 
     // Champion Card Box
     ctx.fillStyle = 'rgba(255, 215, 0, 0.06)';
@@ -137,11 +191,14 @@ async function generateCelebrationCard({
     roundRect(ctx, cardX, cardY, cardW, cardH, 16);
     ctx.stroke();
 
-    // Crown & Badge
+    // Badge Title
+    drawStar(ctx, cardX + 75, cardY + 32, 5, 8, 4, '#FFD700');
+    drawStar(ctx, cardX + cardW - 75, cardY + 32, 5, 8, 4, '#FFD700');
+
     ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 18px sans-serif';
+    ctx.font = 'bold 18px CardFontBold, CardFont, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('👑 #1 STAR CHAMPION', cardX + cardW / 2, cardY + 38);
+    ctx.fillText('#1 STAR CHAMPION', cardX + cardW / 2, cardY + 38);
 
     // Champion Avatar (100x100)
     const avatarImg = await safeLoadImage(champion.avatarUrl);
@@ -173,17 +230,20 @@ async function generateCelebrationCard({
 
     // Champion Name
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 22px sans-serif';
+    ctx.font = 'bold 22px CardFontBold, CardFont, Arial, sans-serif';
+    ctx.textAlign = 'center';
     const champName = champion.displayName || champion.username;
     ctx.fillText(champName.length > 18 ? champName.slice(0, 16) + '...' : champName, avX, cardY + 205);
 
     // Role name / Tier
     ctx.fillStyle = '#57F287';
-    ctx.font = '14px sans-serif';
-    ctx.fillText(champion.roleName || '🌟 Top Community Helper', avX, cardY + 230);
+    ctx.font = '14px CardFont, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    const cleanRoleName = (champion.roleName || 'Community Helper').replace(/[🌟👑🏆✨⭐💫💎]/g, '').trim();
+    ctx.fillText(cleanRoleName || 'Community Helper', avX, cardY + 230);
 
     // Star Count Box
-    const badgeW = 200;
+    const badgeW = 210;
     const badgeH = 45;
     const badgeX = cardX + (cardW - badgeW) / 2;
     const badgeY = cardY + 265;
@@ -197,17 +257,20 @@ async function generateCelebrationCard({
     roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 10);
     ctx.stroke();
 
+    drawStar(ctx, avX - 65, badgeY + 22, 5, 8, 4, '#FFD700');
+
     ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText(`⭐ ${champion.stars} Stars Earned`, avX, badgeY + 30);
+    ctx.font = 'bold 18px CardFontBold, CardFont, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${champion.stars} Stars Earned`, avX + 10, badgeY + 28);
 
     // Right Side: Runners up (#2 to #5)
     const runners = topUsers.slice(1, 5);
     const listX = 450;
-    const listY = 120;
+    const listY = 125;
     const rowW = 460;
     const rowH = 75;
-    const medals = ['🥈', '🥉', '4️⃣', '5️⃣'];
+    const rankLabels = ['#2', '#3', '#4', '#5'];
 
     for (let i = 0; i < runners.length; i++) {
       const u = runners[i];
@@ -224,10 +287,10 @@ async function generateCelebrationCard({
       ctx.stroke();
 
       // Medal / Rank
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '22px sans-serif';
+      ctx.fillStyle = i === 0 ? '#E0E0E0' : (i === 1 ? '#CD7F32' : '#8E9297');
+      ctx.font = 'bold 20px CardFontBold, CardFont, Arial, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(medals[i] || `#${i + 2}`, listX + 18, curY + 45);
+      ctx.fillText(rankLabels[i] || `#${i + 2}`, listX + 18, curY + 45);
 
       // User Avatar (44x44)
       const uAvImg = await safeLoadImage(u.avatarUrl);
@@ -250,27 +313,32 @@ async function generateCelebrationCard({
 
       // Name & Stars
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 16px CardFontBold, CardFont, Arial, sans-serif';
+      ctx.textAlign = 'left';
       const uName = u.displayName || u.username;
       ctx.fillText(uName.length > 16 ? uName.slice(0, 14) + '...' : uName, listX + 125, curY + 36);
 
       ctx.fillStyle = '#A0A4B8';
-      ctx.font = '13px sans-serif';
-      ctx.fillText(u.roleName || 'Helper', listX + 125, curY + 56);
+      ctx.font = '13px CardFont, Arial, sans-serif';
+      ctx.textAlign = 'left';
+      const cleanSubRole = (u.roleName || 'Helper').replace(/[🌟👑🏆✨⭐💫💎]/g, '').trim();
+      ctx.fillText(cleanSubRole || 'Helper', listX + 125, curY + 56);
 
       // Stars tag
+      drawStar(ctx, listX + rowW - 55, curY + 42, 5, 7, 3.5, '#FFD700');
+
       ctx.fillStyle = '#FFD700';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 16px CardFontBold, CardFont, Arial, sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`⭐ ${u.stars}`, listX + rowW - 20, curY + 45);
+      ctx.fillText(`${u.stars}`, listX + rowW - 20, curY + 47);
     }
   }
 
   // 4. Footer
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-  ctx.font = '12px sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.font = '12px CardFont, Arial, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('⭐ Community Stars Honor System • Help others and use /thank to earn Stars!', width / 2, height - 25);
+  ctx.fillText('World Government Community Stars Honor System • Help others and use /thank to earn Stars!', width / 2, height - 25);
 
   return canvas.toBuffer('image/png');
 }
