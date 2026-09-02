@@ -13,8 +13,8 @@ module.exports = {
     console.log(`🌐 Connected to ${guildCount} server(s)`);
     console.log('='.repeat(50));
 
-    // Rich Presence
-    client.user.setActivity('⚖️ Over the Grand Realm | /help', {
+    // Rich Presence Activity
+    client.user.setActivity('⭐ /help | Community Stars & Justice ⚖️', {
       type: ActivityType.Watching
     });
 
