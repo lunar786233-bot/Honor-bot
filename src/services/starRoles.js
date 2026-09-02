@@ -2,37 +2,53 @@ const { EmbedBuilder } = require('discord.js');
 const config = require('../config');
 
 /**
- * Evaluates and grants newly unlocked monthly star milestone roles.
+ * Synchronizes a member's milestone roles based on their exact monthly star count.
+ * Automatically grants newly unlocked roles AND revokes roles if stars drop below threshold.
  */
-async function checkAndAssignMilestones(guild, member, previousMonthly, newMonthly, db, channel = null) {
-  if (!guild || !member) return [];
+async function syncMemberMilestoneRoles(guild, member, currentMonthly, db, channel = null) {
+  if (!guild || !member) return { added: [], removed: [] };
 
   const milestones = await db.getMilestoneRoles(guild.id);
-  if (!milestones || milestones.length === 0) return [];
+  if (!milestones || milestones.length === 0) return { added: [], removed: [] };
 
-  const unlocked = [];
+  const added = [];
+  const removed = [];
 
   for (const m of milestones) {
     const minStars = Number(m.min_stars);
     const roleId = m.role_id;
 
-    // Check if the member just crossed the threshold or doesn't have the role
-    if (newMonthly >= minStars) {
-      const role = await guild.roles.fetch(roleId).catch(() => null);
-      if (role && !member.roles.cache.has(role.id)) {
+    const role = await guild.roles.fetch(roleId).catch(() => null);
+    if (!role) continue;
+
+    const hasRole = member.roles.cache.has(role.id);
+
+    if (currentMonthly >= minStars) {
+      // Eligible for this milestone role
+      if (!hasRole) {
         try {
           await member.roles.add(role, `Reached monthly milestone: ${minStars} Stars`);
-          unlocked.push({ role, minStars });
+          added.push({ role, minStars });
         } catch (err) {
           console.error(`Failed to add milestone role ${role.name} to ${member.user.tag}:`, err);
+        }
+      }
+    } else {
+      // Stars dropped below threshold -> Revoke role
+      if (hasRole) {
+        try {
+          await member.roles.remove(role, `Stars decreased below milestone threshold: ${minStars} Stars`);
+          removed.push({ role, minStars });
+        } catch (err) {
+          console.error(`Failed to remove milestone role ${role.name} from ${member.user.tag}:`, err);
         }
       }
     }
   }
 
   // Send celebration embed if new milestone unlocked
-  if (unlocked.length > 0 && channel) {
-    for (const item of unlocked) {
+  if (added.length > 0 && channel) {
+    for (const item of added) {
       const embed = new EmbedBuilder()
         .setTitle('🎉 Monthly Star Milestone Reached!')
         .setDescription(
@@ -48,7 +64,15 @@ async function checkAndAssignMilestones(guild, member, previousMonthly, newMonth
     }
   }
 
-  return unlocked;
+  return { added, removed };
+}
+
+/**
+ * Backward compatibility alias for checkAndAssignMilestones
+ */
+async function checkAndAssignMilestones(guild, member, previousMonthly, newMonthly, db, channel = null) {
+  const result = await syncMemberMilestoneRoles(guild, member, newMonthly, db, channel);
+  return result.added;
 }
 
 /**
@@ -79,6 +103,7 @@ async function resetGuildMilestoneRoles(guild, db) {
 }
 
 module.exports = {
+  syncMemberMilestoneRoles,
   checkAndAssignMilestones,
   resetGuildMilestoneRoles
 };

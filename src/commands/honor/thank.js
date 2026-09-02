@@ -4,7 +4,7 @@ const {
 } = require('discord.js');
 const config = require('../../config');
 const { getMemberMilestoneInfo } = require('../../utils/stars');
-const { checkAndAssignMilestones } = require('../../services/starRoles');
+const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
 
 module.exports = {
@@ -103,10 +103,9 @@ module.exports = {
     // 1. Check if target reached any monthly milestone roles
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
-      await checkAndAssignMilestones(
+      await syncMemberMilestoneRoles(
         interaction.guild,
         member,
-        previousMonthly,
         monthlyPoints,
         db,
         interaction.channel

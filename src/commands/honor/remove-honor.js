@@ -1,12 +1,13 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const config = require('../../config');
 const { getMemberMilestoneInfo } = require('../../utils/stars');
+const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('remove-stars')
-    .setDescription('Admin: Deduct ⭐ Stars from a member.')
+    .setDescription('Admin: Deduct ⭐ Stars from a member and adjust milestone roles.')
     .addUserOption(option =>
       option.setName('member')
         .setDescription('The member')
@@ -45,6 +46,16 @@ module.exports = {
 
     const info = await getMemberMilestoneInfo(interaction.guild, monthlyPoints, db);
 
+    // Sync member milestone roles downwards
+    let removedRolesText = '';
+    const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+    if (member) {
+      const { removed } = await syncMemberMilestoneRoles(interaction.guild, member, monthlyPoints, db);
+      if (removed && removed.length > 0) {
+        removedRolesText = removed.map(r => `• ${r.role.toString()} *(Required ${r.minStars} ⭐)*`).join('\n');
+      }
+    }
+
     const embed = new EmbedBuilder()
       .setTitle('🔻 Stars Deducted')
       .setDescription(`Deducted **-${stars} ⭐ Stars** from ${target.toString()}.\n💬 Reason: *"${reason}"*`)
@@ -61,6 +72,14 @@ module.exports = {
         }
       )
       .setTimestamp();
+
+    if (removedRolesText) {
+      embed.addFields({
+        name: '🔻 Milestone Roles Removed (Below Threshold)',
+        value: removedRolesText,
+        inline: false
+      });
+    }
 
     await interaction.editReply({ embeds: [embed] });
 

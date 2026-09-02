@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const config = require('../../config');
 const { getMemberMilestoneInfo } = require('../../utils/stars');
-const { checkAndAssignMilestones } = require('../../services/starRoles');
+const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
 
 module.exports = {
@@ -28,14 +28,13 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(false),
   async execute(interaction, db) {
-    // Instantly acknowledge interaction to prevent 3-second timeout
     await interaction.deferReply();
 
     const target = interaction.options.getUser('member');
     const stars = interaction.options.getInteger('stars');
     const reason = interaction.options.getString('reason') || 'Admin grant';
 
-    const { monthlyPoints, totalPoints, previousMonthly } = await db.addReputation(
+    const { monthlyPoints, totalPoints } = await db.addReputation(
       interaction.guild.id,
       interaction.user.id,
       `[Admin] ${interaction.user.tag}`,
@@ -69,10 +68,9 @@ module.exports = {
     // Check if target reached milestone
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
-      await checkAndAssignMilestones(
+      await syncMemberMilestoneRoles(
         interaction.guild,
         member,
-        previousMonthly,
         monthlyPoints,
         db,
         interaction.channel
