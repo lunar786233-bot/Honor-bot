@@ -7,7 +7,6 @@ module.exports = {
   once: true,
   execute(client, db) {
     const guildCount = client.guilds.cache.size;
-    const userCount = client.users.cache.size;
 
     console.log('='.repeat(50));
     console.log(`✅ ${client.user.tag} (${client.user.id}) is ONLINE & READY!`);
@@ -15,7 +14,7 @@ module.exports = {
     console.log('='.repeat(50));
 
     // Rich Presence
-    client.user.setActivity('⭐ /help | Community Stars', {
+    client.user.setActivity('⚖️ Over the Grand Realm | /help', {
       type: ActivityType.Watching
     });
 

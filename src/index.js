@@ -1,16 +1,25 @@
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
 const config = require('./config');
 const { getDatabaseInstance } = require('./database');
+
+// Lightweight Keep-Alive HTTP server for Railway & Cloud hosting platforms
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('World Government Discord Bot is 24/7 ONLINE & HEALTHY!\n');
+}).listen(port, () => {
+  console.log(`🌐 Keep-Alive HTTP server listening on port ${port}`);
+});
 
 async function bootstrap() {
   // Check token
   if (!config.token || config.token === 'your_bot_token_here') {
     console.log('\n' + '='.repeat(60));
     console.log('❌ MISSING DISCORD BOT TOKEN!');
-    console.log('Please edit the ".env" file in your discord_bot_node folder and set:');
-    console.log('DISCORD_TOKEN=your_token_from_discord_developer_portal');
+    console.log('Please set DISCORD_TOKEN in environment variables.');
     console.log('='.repeat(60) + '\n');
     process.exit(1);
   }
