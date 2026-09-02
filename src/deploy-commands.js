@@ -21,13 +21,13 @@ for (const folder of commandFolders) {
   }
 }
 
-if (!config.token || config.token === 'your_bot_token_here') {
-  console.error('❌ DISCORD_TOKEN is missing in .env! Please add your token first.');
+if (!config.token) {
+  console.error('❌ DISCORD_TOKEN is missing in .env!');
   process.exit(1);
 }
 
-if (!config.clientId || config.clientId === 'your_client_id_here') {
-  console.error('❌ CLIENT_ID is missing in .env! Please add your Application ID from Discord Developer Portal.');
+if (!config.clientId) {
+  console.error('❌ CLIENT_ID is missing in .env!');
   process.exit(1);
 }
 
@@ -35,23 +35,19 @@ const rest = new REST().setToken(config.token);
 
 (async () => {
   try {
-    console.log(`Started refreshing ${commands.length} application (/) commands.`);
+    console.log(`Started refreshing ${commands.length} application (/) commands across authorized guilds...`);
 
-    let data;
-    if (config.guildId) {
-      // Instant server sync
-      data = await rest.put(
-        Routes.applicationGuildCommands(config.clientId, config.guildId),
-        { body: commands }
-      );
-      console.log(`✅ Successfully reloaded ${data.length} application (/) commands for guild ID ${config.guildId}.`);
-    } else {
-      // Global sync
-      data = await rest.put(
-        Routes.applicationCommands(config.clientId),
-        { body: commands }
-      );
-      console.log(`✅ Successfully reloaded ${data.length} global application (/) commands.`);
+    const targetGuilds = config.allowedGuilds || ['1544347574109208639', '1214910672719319060'];
+    for (const gid of targetGuilds) {
+      try {
+        const data = await rest.put(
+          Routes.applicationGuildCommands(config.clientId, gid),
+          { body: commands }
+        );
+        console.log(`✅ Successfully deployed ${data.length} application (/) commands to guild ID ${gid}.`);
+      } catch (err) {
+        console.error(`❌ Failed deploying to guild ${gid}:`, err.message);
+      }
     }
   } catch (error) {
     console.error('Error deploying slash commands:', error);
