@@ -1,0 +1,28 @@
+{
+  "name": "sentinel-discord-bot",
+  "version": "1.0.0",
+  "description": "Modern Discord Bot & Community Helper Honor System in Node.js",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "discord",
+    "discord.js",
+    "bot",
+    "honor-system",
+    "moderation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.8",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "mongoose": "^9.9.4",
+    "node-cron": "^3.0.3"
+  }
+}
