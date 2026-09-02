@@ -35,38 +35,40 @@ module.exports = {
     const period = interaction.options.getString('period') || 'month';
     const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
 
-    const rows = db.getLeaderboard(guild.id, period, 5);
-    const milestones = db.getMilestoneRoles(guild.id);
+    const rows = await db.getLeaderboard(guild.id, period, 5);
+    const milestones = await db.getMilestoneRoles(guild.id);
 
     const topUsers = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      let userObj = null;
-      let memberObj = null;
+    if (rows && rows.length > 0) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        let userObj = null;
+        let memberObj = null;
 
-      try {
-        memberObj = await guild.members.fetch(row.user_id).catch(() => null);
-        userObj = memberObj ? memberObj.user : await interaction.client.users.fetch(row.user_id).catch(() => null);
-      } catch (e) {}
+        try {
+          memberObj = await guild.members.fetch(row.user_id).catch(() => null);
+          userObj = memberObj ? memberObj.user : await interaction.client.users.fetch(row.user_id).catch(() => null);
+        } catch (e) {}
 
-      let roleName = '⭐ Community Helper';
-      if (milestones && milestones.length > 0) {
-        for (const m of milestones) {
-          if (row.points >= m.min_stars) {
-            const r = guild.roles.cache.get(m.role_id);
-            if (r) roleName = r.name;
+        let roleName = '⭐ Community Helper';
+        if (milestones && milestones.length > 0) {
+          for (const m of milestones) {
+            if (row.points >= m.min_stars) {
+              const r = guild.roles.cache.get(m.role_id);
+              if (r) roleName = r.name;
+            }
           }
         }
-      }
 
-      topUsers.push({
-        rank: i + 1,
-        username: userObj ? userObj.username : `User ${row.user_id}`,
-        displayName: memberObj ? memberObj.displayName : (userObj ? userObj.displayName || userObj.username : `User ${row.user_id}`),
-        avatarUrl: userObj ? userObj.displayAvatarURL({ extension: 'png', size: 256 }) : null,
-        stars: row.points,
-        roleName
-      });
+        topUsers.push({
+          rank: i + 1,
+          username: userObj ? userObj.username : `User ${row.user_id}`,
+          displayName: memberObj ? memberObj.displayName : (userObj ? userObj.displayName || userObj.username : `User ${row.user_id}`),
+          avatarUrl: userObj ? userObj.displayAvatarURL({ extension: 'png', size: 256 }) : null,
+          stars: row.points,
+          roleName
+        });
+      }
     }
 
     const title = period === 'month' ? '🌟 MONTHLY STAR CHAMPIONS' : '👑 ALL-TIME STARS HALL OF FAME';
