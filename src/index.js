@@ -6,6 +6,11 @@ if (!global.crypto) {
   global.crypto = nodeCrypto;
 }
 
+const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {}
+
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -15,10 +20,20 @@ const { getDatabaseInstance } = require('./database');
 
 // Lightweight Keep-Alive HTTP server for Railway & Cloud hosting platforms
 const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('World Government Discord Bot is 24/7 ONLINE & HEALTHY!\n');
-}).listen(port, () => {
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`Port ${port} in use, continuing bot startup.`);
+  } else {
+    console.error('HTTP server error:', err);
+  }
+});
+
+server.listen(port, () => {
   console.log(`🌐 Keep-Alive HTTP server listening on port ${port}`);
 });
 
