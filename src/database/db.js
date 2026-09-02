@@ -1,10 +1,21 @@
 const path = require('path');
 const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
+
+let DatabaseSync;
+try {
+  DatabaseSync = require('node:sqlite').DatabaseSync;
+} catch (e) {
+  DatabaseSync = null;
+}
+
 const config = require('../config');
 
 class DBManager {
   constructor(customPath = null) {
+    if (!DatabaseSync) {
+      throw new Error('Native SQLite is only supported in Node.js 22+. For cloud deployment, please set MONGODB_URI.');
+    }
+
     const dbFile = customPath || config.dbPath;
     const dbDir = path.dirname(dbFile);
     if (!fs.existsSync(dbDir)) {
