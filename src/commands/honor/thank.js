@@ -8,9 +8,6 @@ const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
 const { sendSuspiciousTradeAlert } = require('../../services/adminAlerts');
 
-// In-memory global server cooldown tracker (5 minutes between ANY thank per guild)
-const globalServerThankMap = new Map();
-
 // Default thank channel requested: 1545036041583595562 (🫂・ᴛʜᴀɴᴋ)
 const DEFAULT_THANK_CHANNEL_ID = '1545036041583595562';
 
@@ -75,57 +72,27 @@ module.exports = {
       });
     }
 
-    // 4. Server-Wide Global Cooldown Check (5 Minutes between ANY thank in server)
-    const GLOBAL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
-    const lastGlobalThank = globalServerThankMap.get(guildId);
-    if (lastGlobalThank) {
-      const elapsedGlobal = Date.now() - lastGlobalThank;
-      if (elapsedGlobal < GLOBAL_COOLDOWN_MS) {
-        const remainingGlobal = GLOBAL_COOLDOWN_MS - elapsedGlobal;
-        const minsRem = Math.floor(remainingGlobal / 60000);
-        const secsRem = Math.floor((remainingGlobal % 60000) / 1000);
-        return interaction.reply({
-          content: `⏳ **Server Global Cooldown!** A community star was recently awarded in this server.\nTo prevent spam and star farming, everyone must wait **${minsRem}m ${secsRem}s** before the next \`/thank\` can be used.`,
-          ephemeral: true
-        });
-      }
-    }
-
-    // 5. GIVER COOLDOWN (8 Hours): User who gave a star must wait 8 hours before giving a star to anyone again
+    // 4. GIVER GENERAL COOLDOWN (1 Hour):
+    // After giving a star, you must wait 1 hour before you can give a star to another member
     const callerDoc = await db.getUserHonorDoc(guildId, interaction.user.id);
-    const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000; // 8 hours
+    const ONE_HOUR_MS = 1 * 60 * 60 * 1000; // 1 hour
 
     if (callerDoc && callerDoc.last_given_at) {
       const elapsedGiven = Date.now() - new Date(callerDoc.last_given_at).getTime();
-      if (elapsedGiven < EIGHT_HOURS_MS) {
-        const remainingGiven = EIGHT_HOURS_MS - elapsedGiven;
-        const hoursRem = Math.floor(remainingGiven / (3600 * 1000));
-        const minsRem = Math.floor((remainingGiven % (3600 * 1000)) / (60 * 1000));
+      if (elapsedGiven < ONE_HOUR_MS) {
+        const remainingGiven = ONE_HOUR_MS - elapsedGiven;
+        const minsRem = Math.floor(remainingGiven / 60000);
+        const secsRem = Math.floor((remainingGiven % 60000) / 1000);
         return interaction.reply({
-          content: `⏳ **Giving Cooldown Active (8 Hours)!**\nYou recently awarded a star to someone. You must wait **${hoursRem}h ${minsRem}m** before you can give a star to anyone again.`,
+          content: `⏳ **Giving Cooldown Active (1 Hour)!**\nYou recently awarded a star to someone.\nYou must wait **${minsRem}m ${secsRem}s** before you can give a star to another member.`,
           ephemeral: true
         });
       }
     }
 
-    // 6. MUTUAL 8-HOUR TRADE LOCK (Between Caller & Target specifically):
-    // If target gave stars to caller in the last 8 hours, caller CANNOT give stars back to target!
-    // (Caller can still give stars to other members, but NOT back to the person who gave them a star).
-    const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
-    if (reverseThankTime) {
-      const elapsedReverse = Date.now() - new Date(reverseThankTime).getTime();
-      if (elapsedReverse < EIGHT_HOURS_MS) {
-        const remainingReverse = EIGHT_HOURS_MS - elapsedReverse;
-        const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
-        const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
-        return interaction.reply({
-          content: `🚫 **Mutual Trade Lock (8 Hours)!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot give a star back to them for **${hoursRem}h ${minsRem}m**.\n*(You can still thank other members who helped you).*`,
-          ephemeral: true
-        });
-      }
-    }
-
-    // Same-recipient 24-hour check
+    // 5. SAME-PERSON COOLDOWN (8 Hours):
+    // If User A gave a star to User B, User A cannot give a star to User B again for 8 hours!
+    const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000; // 8 hours
     const lastThankToTarget = await db.getLastThankTime(guildId, interaction.user.id, target.id);
     if (lastThankToTarget) {
       const elapsedTarget = Date.now() - new Date(lastThankToTarget).getTime();
@@ -134,7 +101,23 @@ module.exports = {
         const hoursRem = Math.floor(remTarget / (3600 * 1000));
         const minsRem = Math.floor((remTarget % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `⏳ **User Cooldown!** You already endorsed <@${target.id}> recently. You can thank them again in **${hoursRem}h ${minsRem}m**.`,
+          content: `⏳ **Recipient Cooldown (8 Hours)!**\nYou already gave a star to <@${target.id}> recently.\nYou cannot thank them again for **${hoursRem}h ${minsRem}m**.\n*(You can still thank other members who help you once your 1h timer ends).*`,
+          ephemeral: true
+        });
+      }
+    }
+
+    // 6. MUTUAL TRADE LOCK (8 Hours):
+    // If User B gave a star to User A, User A CANNOT give a star back to User B for 8 hours!
+    const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
+    if (reverseThankTime) {
+      const elapsedReverse = Date.now() - new Date(reverseThankTime).getTime();
+      if (elapsedReverse < EIGHT_HOURS_MS) {
+        const remainingReverse = EIGHT_HOURS_MS - elapsedReverse;
+        const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
+        const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
+        return interaction.reply({
+          content: `🚫 **Mutual Trade Lock (8 Hours)!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot give a star back to them for **${hoursRem}h ${minsRem}m**.\n*(You can still thank other members who help you).*`,
           ephemeral: true
         });
       }
@@ -152,9 +135,6 @@ module.exports = {
       reason,
       1
     );
-
-    // Set server-wide global cooldown timestamp
-    globalServerThankMap.set(guildId, Date.now());
 
     // 8. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
     if (db.detectSuspiciousTrading) {
