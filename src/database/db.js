@@ -71,6 +71,7 @@ class DBManager {
         monthly_points INTEGER DEFAULT 0,
         total_points INTEGER DEFAULT 0,
         last_given_at DATETIME,
+        last_received_at DATETIME,
         month_key TEXT NOT NULL,
         PRIMARY KEY (guild_id, user_id)
       );
@@ -144,6 +145,11 @@ class DBManager {
     return row ? new Date(row.timestamp) : null;
   }
 
+  getUserHonorDoc(guildId, userId) {
+    const stmt = this.db.prepare('SELECT * FROM reputation_scores WHERE guild_id = ? AND user_id = ?');
+    return stmt.get(String(guildId), String(userId)) || null;
+  }
+
   getMonthlyUserThankLogs(guildId, userId) {
     const monthKey = this.getCurrentMonthKey();
     const stmt = this.db.prepare(`
@@ -199,6 +205,13 @@ class DBManager {
     `);
     logStmt.run(String(guildId), String(giverId), String(giverName), String(receiverId), String(receiverName), String(reason), String(monthKey), String(nowIso));
 
+    // Update giver last_given_at
+    this.db.prepare(`
+      INSERT INTO reputation_scores (guild_id, user_id, monthly_points, total_points, last_given_at, month_key)
+      VALUES (?, ?, 0, 0, ?, ?)
+      ON CONFLICT(guild_id, user_id) DO UPDATE SET last_given_at = excluded.last_given_at
+    `).run(String(guildId), String(giverId), nowIso, monthKey);
+
     const getStmt = this.db.prepare('SELECT * FROM reputation_scores WHERE guild_id = ? AND user_id = ?');
     const existing = getStmt.get(String(guildId), String(receiverId));
 
@@ -210,7 +223,7 @@ class DBManager {
       newMonthly = Math.max(0, Number(points));
       newTotal = Math.max(0, Number(points));
       const insertStmt = this.db.prepare(`
-        INSERT INTO reputation_scores (guild_id, user_id, monthly_points, total_points, last_given_at, month_key)
+        INSERT INTO reputation_scores (guild_id, user_id, monthly_points, total_points, last_received_at, month_key)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
       insertStmt.run(String(guildId), String(receiverId), newMonthly, newTotal, nowIso, monthKey);
@@ -222,7 +235,7 @@ class DBManager {
 
       const updateStmt = this.db.prepare(`
         UPDATE reputation_scores
-        SET monthly_points = ?, total_points = ?, last_given_at = ?, month_key = ?
+        SET monthly_points = ?, total_points = ?, last_received_at = ?, month_key = ?
         WHERE guild_id = ? AND user_id = ?
       `);
       updateStmt.run(newMonthly, newTotal, nowIso, monthKey, String(guildId), String(receiverId));

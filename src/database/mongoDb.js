@@ -93,6 +93,14 @@ class MongoDBManager {
     return doc ? new Date(doc.timestamp) : null;
   }
 
+  async getUserHonorDoc(guildId, userId) {
+    const doc = await UserHonor.findOne({
+      guild_id: String(guildId),
+      user_id: String(userId)
+    }).lean();
+    return doc || null;
+  }
+
   async getMonthlyUserThankLogs(guildId, userId) {
     const monthKey = this.getCurrentMonthKey();
     const docs = await ThankLog.find({
@@ -179,6 +187,7 @@ class MongoDBManager {
 
   async addReputation(guildId, giverId, giverName, receiverId, receiverName, reason, points = 1) {
     const monthKey = this.getCurrentMonthKey();
+    const now = new Date();
 
     // 1. Log thank
     await ThankLog.create({
@@ -189,10 +198,17 @@ class MongoDBManager {
       receiver_name: String(receiverName),
       reason: String(reason),
       month_key: monthKey,
-      timestamp: new Date()
+      timestamp: now
     });
 
-    // 2. Fetch or update user
+    // 2. Update Giver's last_given_at timestamp
+    await UserHonor.findOneAndUpdate(
+      { guild_id: String(guildId), user_id: String(giverId) },
+      { $set: { last_given_at: now }, $setOnInsert: { month_key: monthKey, monthly_points: 0, total_points: 0 } },
+      { upsert: true }
+    );
+
+    // 3. Fetch or update receiver
     let user = await UserHonor.findOne({ guild_id: String(guildId), user_id: String(receiverId) });
     let previousMonthly = 0;
     let newMonthly = 0;
@@ -206,7 +222,7 @@ class MongoDBManager {
         user_id: String(receiverId),
         monthly_points: newMonthly,
         total_points: newTotal,
-        last_given_at: new Date(),
+        last_received_at: now,
         month_key: monthKey
       });
     } else {
@@ -217,7 +233,7 @@ class MongoDBManager {
 
       user.monthly_points = newMonthly;
       user.total_points = newTotal;
-      user.last_given_at = new Date();
+      user.last_received_at = now;
       user.month_key = monthKey;
       await user.save();
     }

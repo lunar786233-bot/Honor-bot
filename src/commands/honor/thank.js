@@ -91,35 +91,49 @@ module.exports = {
       }
     }
 
-    // 5. Mutual Trade Lock (Reciprocal Block - 24 Hours)
-    // If target gave stars to caller in the last 24 hours, caller cannot thank them back!
-    const MUTUAL_LOCK_MS = 24 * 60 * 60 * 1000; // 24 hours
-    const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
-    if (reverseThankTime) {
-      const elapsedReverse = Date.now() - new Date(reverseThankTime).getTime();
-      if (elapsedReverse < MUTUAL_LOCK_MS) {
-        const remainingReverse = MUTUAL_LOCK_MS - elapsedReverse;
-        const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
-        const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
+    // Fetch caller's honor document for 8-Hour Giver and Receiver Cooldowns
+    const callerDoc = await db.getUserHonorDoc(guildId, interaction.user.id);
+    const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+    // 5. GIVER COOLDOWN (8 Hours): User who recently gave a star must wait 8 hours before giving again
+    if (callerDoc && callerDoc.last_given_at) {
+      const elapsedGiven = Date.now() - new Date(callerDoc.last_given_at).getTime();
+      if (elapsedGiven < EIGHT_HOURS_MS) {
+        const remainingGiven = EIGHT_HOURS_MS - elapsedGiven;
+        const hoursRem = Math.floor(remainingGiven / (3600 * 1000));
+        const minsRem = Math.floor((remainingGiven % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `🚫 **Mutual Star Trading Blocked!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot thank them back for another **${hoursRem}h ${minsRem}m**.`,
+          content: `⏳ **Giving Cooldown Active (8 Hours)!**\nYou recently awarded a star to someone. You must wait **${hoursRem}h ${minsRem}m** before you can give a star to anyone again.`,
           ephemeral: true
         });
       }
     }
 
-    // 6. Per-User Same-Recipient Cooldown (Default 24 Hours)
-    const cooldownHours = cfg && cfg.cooldown_hours ? cfg.cooldown_hours : 24;
-    const lastThank = await db.getLastThankTime(guildId, interaction.user.id, target.id);
-    if (lastThank) {
-      const elapsedMs = Date.now() - new Date(lastThank).getTime();
-      const cooldownMs = cooldownHours * 3600 * 1000;
-      if (elapsedMs < cooldownMs) {
-        const remainingMs = cooldownMs - elapsedMs;
-        const hoursRem = Math.floor(remainingMs / (3600 * 1000));
-        const minsRem = Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000));
+    // 6. RECEIVER COOLDOWN (8 Hours): User who recently received a star must wait 8 hours before giving a star to anyone
+    if (callerDoc && callerDoc.last_received_at) {
+      const elapsedReceived = Date.now() - new Date(callerDoc.last_received_at).getTime();
+      if (elapsedReceived < EIGHT_HOURS_MS) {
+        const remainingReceived = EIGHT_HOURS_MS - elapsedReceived;
+        const hoursRem = Math.floor(remainingReceived / (3600 * 1000));
+        const minsRem = Math.floor((remainingReceived % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `⏳ **User Cooldown Active!** You already endorsed <@${target.id}>.\nYou can thank them again in **${hoursRem}h ${minsRem}m**.`,
+          content: `⏳ **Star Receiver Cooldown (8 Hours)!**\nYou recently received a star! To prevent mutual farming, members who receive a star must wait **${hoursRem}h ${minsRem}m** before they can award a star to anyone.`,
+          ephemeral: true
+        });
+      }
+    }
+
+    // 7. MUTUAL TRADE LOCK (2-Hour Return Lock): If target gave star to caller, caller cannot give star back within 2 hours
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // 2 hours
+    const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
+    if (reverseThankTime) {
+      const elapsedReverse = Date.now() - new Date(reverseThankTime).getTime();
+      if (elapsedReverse < TWO_HOURS_MS) {
+        const remainingReverse = TWO_HOURS_MS - elapsedReverse;
+        const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
+        const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
+        return interaction.reply({
+          content: `🚫 **Mutual Trade Lock!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot thank them back for another **${hoursRem}h ${minsRem}m**.`,
           ephemeral: true
         });
       }
@@ -127,7 +141,7 @@ module.exports = {
 
     await interaction.deferReply();
 
-    // 7. Process Star Award
+    // 8. Process Star Award
     const { monthlyPoints, totalPoints, previousMonthly } = await db.addReputation(
       guildId,
       interaction.user.id,
@@ -141,7 +155,7 @@ module.exports = {
     // Set server-wide global cooldown timestamp
     globalServerThankMap.set(guildId, Date.now());
 
-    // 8. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
+    // 9. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
     if (db.detectSuspiciousTrading) {
       const alertInfo = await db.detectSuspiciousTrading(guildId, interaction.user.id, target.id).catch(() => ({ isSuspicious: false }));
       if (alertInfo && alertInfo.isSuspicious) {
@@ -184,7 +198,7 @@ module.exports = {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // 9. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
+    // 10. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
       await syncMemberMilestoneRoles(
@@ -196,7 +210,7 @@ module.exports = {
       );
     }
 
-    // 10. Trigger instant real-time live leaderboard refresh
+    // 11. Trigger instant real-time live leaderboard refresh
     await updateLiveLeaderboard(interaction.client, db, guildId);
   }
 };

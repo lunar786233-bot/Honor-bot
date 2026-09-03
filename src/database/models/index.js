@@ -7,6 +7,7 @@ const UserHonorSchema = new mongoose.Schema({
   monthly_points: { type: Number, default: 0 },
   total_points: { type: Number, default: 0 },
   last_given_at: { type: Date, default: null },
+  last_received_at: { type: Date, default: null },
   month_key: { type: String, required: true }
 }, { timestamps: true });
 
