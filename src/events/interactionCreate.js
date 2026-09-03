@@ -2,6 +2,8 @@ const { Events, EmbedBuilder, MessageFlags } = require('discord.js');
 const config = require('../config');
 const { buildLiveLeaderboardPayload } = require('../services/liveLeaderboard');
 
+const DEFAULT_THANK_CHANNEL_ID = '1545036041583595562';
+
 module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction, db) {
@@ -39,6 +41,18 @@ module.exports = {
     // 2. Handle Slash Commands
     if (!interaction.isChatInputCommand()) return;
 
+    // Channel restriction: In thank channel, ONLY /thank is allowed!
+    if (db) {
+      const cfg = await db.getHonorConfig(interaction.guildId).catch(() => null);
+      const thankChannelId = (cfg && cfg.allowed_thank_channel_id) ? cfg.allowed_thank_channel_id : DEFAULT_THANK_CHANNEL_ID;
+      if (interaction.channelId === thankChannelId && interaction.commandName !== 'thank') {
+        return interaction.reply({
+          content: `❌ In <#${thankChannelId}>, strictly **only the \`/thank\` command** is allowed!\nPlease use \`/${interaction.commandName}\` in your bot commands channel.`,
+          ephemeral: true
+        }).catch(() => null);
+      }
+    }
+
     const command = interaction.client.commands.get(interaction.commandName);
     if (!command) {
       console.error(`No command matching ${interaction.commandName} was found.`);
@@ -60,8 +74,8 @@ module.exports = {
         .setDescription('An unexpected error occurred while executing this command. Check the console for details.')
         .setColor(config.colors.error);
 
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ embeds: [embed], flags: [MessageFlags.Ephemeral] }).catch(() => null);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ embeds: [embed] }).catch(() => null);
       } else {
         await interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] }).catch(() => null);
       }

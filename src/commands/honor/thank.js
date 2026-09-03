@@ -123,9 +123,12 @@ module.exports = {
       }
     }
 
-    // 7. MUTUAL TRADE LOCK (2-Hour Return Lock): If target gave star to caller, caller cannot give star back within 2 hours
+    // 7. MUTUAL 2-WAY TRADE LOCK (2-Hour Window):
+    // Neither user can give stars to each other within 2 hours of a previous exchange!
     const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // 2 hours
     const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
+    const forwardThankTime = await db.getLastThankTime(guildId, interaction.user.id, target.id);
+
     if (reverseThankTime) {
       const elapsedReverse = Date.now() - new Date(reverseThankTime).getTime();
       if (elapsedReverse < TWO_HOURS_MS) {
@@ -133,7 +136,20 @@ module.exports = {
         const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
         const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `🚫 **Mutual Trade Lock!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot thank them back for another **${hoursRem}h ${minsRem}m**.`,
+          content: `🚫 **Mutual Trade Lock!**\n<@${target.id}> gave you a star recently.\nNeither of you can trade stars with each other for another **${hoursRem}h ${minsRem}m**.`,
+          ephemeral: true
+        });
+      }
+    }
+
+    if (forwardThankTime) {
+      const elapsedForward = Date.now() - new Date(forwardThankTime).getTime();
+      if (elapsedForward < TWO_HOURS_MS) {
+        const remainingForward = TWO_HOURS_MS - elapsedForward;
+        const hoursRem = Math.floor(remainingForward / (3600 * 1000));
+        const minsRem = Math.floor((remainingForward % (3600 * 1000)) / (60 * 1000));
+        return interaction.reply({
+          content: `⏳ **Mutual Trade Cooldown!**\nYou already gave a star to <@${target.id}> recently.\nYou must wait **${hoursRem}h ${minsRem}m** before giving them another star.`,
           ephemeral: true
         });
       }
