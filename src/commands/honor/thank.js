@@ -91,11 +91,10 @@ module.exports = {
       }
     }
 
-    // Fetch caller's honor document for 8-Hour Giver and Receiver Cooldowns
+    // 5. GIVER COOLDOWN (8 Hours): User who gave a star must wait 8 hours before giving a star to anyone again
     const callerDoc = await db.getUserHonorDoc(guildId, interaction.user.id);
     const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000; // 8 hours
 
-    // 5. GIVER COOLDOWN (8 Hours): User who recently gave a star must wait 8 hours before giving again
     if (callerDoc && callerDoc.last_given_at) {
       const elapsedGiven = Date.now() - new Date(callerDoc.last_given_at).getTime();
       if (elapsedGiven < EIGHT_HOURS_MS) {
@@ -109,47 +108,33 @@ module.exports = {
       }
     }
 
-    // 6. RECEIVER COOLDOWN (8 Hours): User who recently received a star must wait 8 hours before giving a star to anyone
-    if (callerDoc && callerDoc.last_received_at) {
-      const elapsedReceived = Date.now() - new Date(callerDoc.last_received_at).getTime();
-      if (elapsedReceived < EIGHT_HOURS_MS) {
-        const remainingReceived = EIGHT_HOURS_MS - elapsedReceived;
-        const hoursRem = Math.floor(remainingReceived / (3600 * 1000));
-        const minsRem = Math.floor((remainingReceived % (3600 * 1000)) / (60 * 1000));
-        return interaction.reply({
-          content: `⏳ **Star Receiver Cooldown (8 Hours)!**\nYou recently received a star! To prevent mutual farming, members who receive a star must wait **${hoursRem}h ${minsRem}m** before they can award a star to anyone.`,
-          ephemeral: true
-        });
-      }
-    }
-
-    // 7. MUTUAL 2-WAY TRADE LOCK (2-Hour Window):
-    // Neither user can give stars to each other within 2 hours of a previous exchange!
-    const TWO_HOURS_MS = 2 * 60 * 60 * 1000; // 2 hours
+    // 6. MUTUAL 8-HOUR TRADE LOCK (Between Caller & Target specifically):
+    // If target gave stars to caller in the last 8 hours, caller CANNOT give stars back to target!
+    // (Caller can still give stars to other members, but NOT back to the person who gave them a star).
     const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
-    const forwardThankTime = await db.getLastThankTime(guildId, interaction.user.id, target.id);
-
     if (reverseThankTime) {
       const elapsedReverse = Date.now() - new Date(reverseThankTime).getTime();
-      if (elapsedReverse < TWO_HOURS_MS) {
-        const remainingReverse = TWO_HOURS_MS - elapsedReverse;
+      if (elapsedReverse < EIGHT_HOURS_MS) {
+        const remainingReverse = EIGHT_HOURS_MS - elapsedReverse;
         const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
         const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `🚫 **Mutual Trade Lock!**\n<@${target.id}> gave you a star recently.\nNeither of you can trade stars with each other for another **${hoursRem}h ${minsRem}m**.`,
+          content: `🚫 **Mutual Trade Lock (8 Hours)!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot give a star back to them for **${hoursRem}h ${minsRem}m**.\n*(You can still thank other members who helped you).*`,
           ephemeral: true
         });
       }
     }
 
-    if (forwardThankTime) {
-      const elapsedForward = Date.now() - new Date(forwardThankTime).getTime();
-      if (elapsedForward < TWO_HOURS_MS) {
-        const remainingForward = TWO_HOURS_MS - elapsedForward;
-        const hoursRem = Math.floor(remainingForward / (3600 * 1000));
-        const minsRem = Math.floor((remainingForward % (3600 * 1000)) / (60 * 1000));
+    // Same-recipient 24-hour check
+    const lastThankToTarget = await db.getLastThankTime(guildId, interaction.user.id, target.id);
+    if (lastThankToTarget) {
+      const elapsedTarget = Date.now() - new Date(lastThankToTarget).getTime();
+      if (elapsedTarget < EIGHT_HOURS_MS) {
+        const remTarget = EIGHT_HOURS_MS - elapsedTarget;
+        const hoursRem = Math.floor(remTarget / (3600 * 1000));
+        const minsRem = Math.floor((remTarget % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `⏳ **Mutual Trade Cooldown!**\nYou already gave a star to <@${target.id}> recently.\nYou must wait **${hoursRem}h ${minsRem}m** before giving them another star.`,
+          content: `⏳ **User Cooldown!** You already endorsed <@${target.id}> recently. You can thank them again in **${hoursRem}h ${minsRem}m**.`,
           ephemeral: true
         });
       }
@@ -157,7 +142,7 @@ module.exports = {
 
     await interaction.deferReply();
 
-    // 8. Process Star Award
+    // 7. Process Star Award
     const { monthlyPoints, totalPoints, previousMonthly } = await db.addReputation(
       guildId,
       interaction.user.id,
@@ -171,7 +156,7 @@ module.exports = {
     // Set server-wide global cooldown timestamp
     globalServerThankMap.set(guildId, Date.now());
 
-    // 9. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
+    // 8. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
     if (db.detectSuspiciousTrading) {
       const alertInfo = await db.detectSuspiciousTrading(guildId, interaction.user.id, target.id).catch(() => ({ isSuspicious: false }));
       if (alertInfo && alertInfo.isSuspicious) {
@@ -214,7 +199,7 @@ module.exports = {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // 10. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
+    // 9. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
       await syncMemberMilestoneRoles(
@@ -226,7 +211,7 @@ module.exports = {
       );
     }
 
-    // 11. Trigger instant real-time live leaderboard refresh
+    // 10. Trigger instant real-time live leaderboard refresh
     await updateLiveLeaderboard(interaction.client, db, guildId);
   }
 };
