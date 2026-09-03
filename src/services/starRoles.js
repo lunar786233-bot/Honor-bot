@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../config');
+const { sendMilestoneRoleAuditAlert } = require('./adminAlerts');
 
 /**
  * Synchronizes a member's milestone roles based on their exact monthly star count.
@@ -46,21 +47,38 @@ async function syncMemberMilestoneRoles(guild, member, currentMonthly, db, chann
     }
   }
 
-  // Send celebration embed if new milestone unlocked
-  if (added.length > 0 && channel) {
-    for (const item of added) {
-      const embed = new EmbedBuilder()
-        .setTitle('🎉 Monthly Star Milestone Reached!')
-        .setDescription(
-          `🌟 **Level Up!** ${member.toString()} has reached **${item.minStars} ⭐ Stars** this month!\n\n` +
-          `They have been awarded the ${item.role.toString()} role! Congratulations! 🚀`
-        )
-        .setColor(0xFEE75C)
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: 'Keep helping to unlock higher star milestone roles!' })
-        .setTimestamp();
+  // Handle milestone unlock events
+  if (added.length > 0) {
+    // 1. Send public celebration in channel
+    if (channel) {
+      for (const item of added) {
+        const embed = new EmbedBuilder()
+          .setTitle('🎉 Monthly Star Milestone Reached!')
+          .setDescription(
+            `🌟 **Level Up!** ${member.toString()} has reached **${item.minStars} ⭐ Stars** this month!\n\n` +
+            `They have been awarded the ${item.role.toString()} role! Congratulations! 🚀`
+          )
+          .setColor(0xFEE75C)
+          .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+          .setFooter({ text: 'Keep helping to unlock higher star milestone roles!' })
+          .setTimestamp();
 
-      await channel.send({ embeds: [embed] }).catch(() => null);
+        await channel.send({ embeds: [embed] }).catch(() => null);
+      }
+    }
+
+    // 2. Fetch full star receipt logs and send audit report to Admin Alert Channel (1318164139788468227)
+    const starLogs = await db.getMonthlyUserThankLogs(guild.id, member.id).catch(() => []);
+    for (const item of added) {
+      await sendMilestoneRoleAuditAlert(
+        guild.client,
+        guild,
+        member,
+        item.role,
+        item.minStars,
+        currentMonthly,
+        starLogs
+      ).catch(err => console.error('Failed to send milestone audit log:', err));
     }
   }
 

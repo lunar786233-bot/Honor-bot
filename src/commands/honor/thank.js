@@ -6,9 +6,13 @@ const config = require('../../config');
 const { getMemberMilestoneInfo } = require('../../utils/stars');
 const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
+const { sendSuspiciousTradeAlert } = require('../../services/adminAlerts');
 
 // In-memory global server cooldown tracker (5 minutes between ANY thank per guild)
 const globalServerThankMap = new Map();
+
+// Default thank channel requested: 1545036041583595562 (🫂・ᴛʜᴀɴᴋ)
+const DEFAULT_THANK_CHANNEL_ID = '1545036041583595562';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,10 +51,10 @@ module.exports = {
 
     const cfg = await db.getHonorConfig(guildId);
 
-    // 2. Channel Restriction Check (Default: #1544716619325112410 on test server or configured channel)
+    // 2. Channel Restriction Check (Default: #1545036041583595562 - 🫂・ᴛʜᴀɴᴋ)
     const allowedChannelId = cfg && cfg.allowed_thank_channel_id
       ? cfg.allowed_thank_channel_id
-      : (guildId === '1544347574109208639' ? '1544716619325112410' : null);
+      : DEFAULT_THANK_CHANNEL_ID;
 
     if (allowedChannelId && interaction.channelId !== allowedChannelId) {
       return interaction.reply({
@@ -137,6 +141,20 @@ module.exports = {
     // Set server-wide global cooldown timestamp
     globalServerThankMap.set(guildId, Date.now());
 
+    // 8. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
+    if (db.detectSuspiciousTrading) {
+      const alertInfo = await db.detectSuspiciousTrading(guildId, interaction.user.id, target.id).catch(() => ({ isSuspicious: false }));
+      if (alertInfo && alertInfo.isSuspicious) {
+        await sendSuspiciousTradeAlert(interaction.client, interaction.guild, {
+          giver: interaction.user,
+          receiver: target,
+          reason,
+          type: alertInfo.type,
+          details: alertInfo.details
+        }).catch(err => console.error('Failed to dispatch suspicious trading alert:', err));
+      }
+    }
+
     const info = await getMemberMilestoneInfo(interaction.guild, monthlyPoints, db);
 
     const embed = new EmbedBuilder()
@@ -166,7 +184,7 @@ module.exports = {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // 8. Check if target reached any monthly milestone roles
+    // 9. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
       await syncMemberMilestoneRoles(
@@ -178,7 +196,7 @@ module.exports = {
       );
     }
 
-    // 9. Trigger instant real-time live leaderboard refresh
+    // 10. Trigger instant real-time live leaderboard refresh
     await updateLiveLeaderboard(interaction.client, db, guildId);
   }
 };

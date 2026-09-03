@@ -144,6 +144,51 @@ class DBManager {
     return row ? new Date(row.timestamp) : null;
   }
 
+  getMonthlyUserThankLogs(guildId, userId) {
+    const monthKey = this.getCurrentMonthKey();
+    const stmt = this.db.prepare(`
+      SELECT giver_id, giver_name, receiver_id, receiver_name, reason, timestamp
+      FROM reputation_logs
+      WHERE guild_id = ? AND receiver_id = ? AND month_key = ?
+      ORDER BY id DESC
+    `);
+    return stmt.all(String(guildId), String(userId), String(monthKey));
+  }
+
+  detectSuspiciousTrading(guildId, giverId, receiverId) {
+    const monthKey = this.getCurrentMonthKey();
+    const gToR = this.db.prepare(`
+      SELECT COUNT(*) AS c FROM reputation_logs
+      WHERE guild_id = ? AND giver_id = ? AND receiver_id = ? AND month_key = ?
+    `).get(String(guildId), String(giverId), String(receiverId), String(monthKey));
+
+    const rToG = this.db.prepare(`
+      SELECT COUNT(*) AS c FROM reputation_logs
+      WHERE guild_id = ? AND giver_id = ? AND receiver_id = ? AND month_key = ?
+    `).get(String(guildId), String(receiverId), String(giverId), String(monthKey));
+
+    const gCount = gToR ? Number(gToR.c) : 0;
+    const rCount = rToG ? Number(rToG.c) : 0;
+
+    if (gCount >= 2 && rCount >= 2) {
+      return {
+        isSuspicious: true,
+        type: 'Mutual Star Exchange Loop (2-Way)',
+        details: `<@${giverId}> gave <@${receiverId}> **${gCount} stars** this month, while <@${receiverId}> gave <@${giverId}> **${rCount} stars**.`
+      };
+    }
+
+    if (gCount >= 3) {
+      return {
+        isSuspicious: true,
+        type: 'Frequent Same-User Feeding (1-Way Concentration)',
+        details: `<@${giverId}> has given <@${receiverId}> **${gCount} stars** this month.`
+      };
+    }
+
+    return { isSuspicious: false };
+  }
+
   addReputation(guildId, giverId, giverName, receiverId, receiverName, reason, points = 1) {
     const monthKey = this.getCurrentMonthKey();
     const nowIso = new Date().toISOString();

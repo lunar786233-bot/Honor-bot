@@ -93,6 +93,90 @@ class MongoDBManager {
     return doc ? new Date(doc.timestamp) : null;
   }
 
+  async getMonthlyUserThankLogs(guildId, userId) {
+    const monthKey = this.getCurrentMonthKey();
+    const docs = await ThankLog.find({
+      guild_id: String(guildId),
+      receiver_id: String(userId),
+      month_key: monthKey
+    }).sort({ timestamp: -1 }).lean();
+
+    return docs;
+  }
+
+  async detectSuspiciousTrading(guildId, giverId, receiverId) {
+    const monthKey = this.getCurrentMonthKey();
+
+    // 1. Direct mutual count this month
+    const giverToReceiverCount = await ThankLog.countDocuments({
+      guild_id: String(guildId),
+      giver_id: String(giverId),
+      receiver_id: String(receiverId),
+      month_key: monthKey
+    });
+
+    const receiverToGiverCount = await ThankLog.countDocuments({
+      guild_id: String(guildId),
+      giver_id: String(receiverId),
+      receiver_id: String(giverId),
+      month_key: monthKey
+    });
+
+    if (giverToReceiverCount >= 2 && receiverToGiverCount >= 2) {
+      return {
+        isSuspicious: true,
+        type: 'Mutual Star Exchange Loop (2-Way)',
+        details: `<@${giverId}> gave <@${receiverId}> **${giverToReceiverCount} stars** this month, while <@${receiverId}> gave <@${giverId}> **${receiverToGiverCount} stars**.`
+      };
+    }
+
+    // 2. High Frequency (Giver gave receiver 3+ stars in a single week)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentFromGiver = await ThankLog.countDocuments({
+      guild_id: String(guildId),
+      giver_id: String(giverId),
+      receiver_id: String(receiverId),
+      timestamp: { $gte: sevenDaysAgo }
+    });
+
+    if (recentFromGiver >= 3) {
+      return {
+        isSuspicious: true,
+        type: 'Frequent Same-User Feeding (1-Way Concentration)',
+        details: `<@${giverId}> has given <@${receiverId}> **${recentFromGiver} stars** within the last 7 days.`
+      };
+    }
+
+    // 3. 3-Way Circular Ring: Check if receiver recently gave to someone who gave to giver
+    const receiverThanks = await ThankLog.find({
+      guild_id: String(guildId),
+      giver_id: String(receiverId),
+      timestamp: { $gte: sevenDaysAgo }
+    }).lean();
+
+    for (const rt of receiverThanks) {
+      const thirdUserId = rt.receiver_id;
+      if (thirdUserId !== giverId) {
+        const thirdGaveToGiver = await ThankLog.findOne({
+          guild_id: String(guildId),
+          giver_id: String(thirdUserId),
+          receiver_id: String(giverId),
+          timestamp: { $gte: sevenDaysAgo }
+        }).lean();
+
+        if (thirdGaveToGiver) {
+          return {
+            isSuspicious: true,
+            type: '3-Way Circular Star Ring (A ➔ B ➔ C ➔ A)',
+            details: `Circular loop detected:\n• <@${giverId}> ➔ <@${receiverId}>\n• <@${receiverId}> ➔ <@${thirdUserId}>\n• <@${thirdUserId}> ➔ <@${giverId}>`
+          };
+        }
+      }
+    }
+
+    return { isSuspicious: false };
+  }
+
   async addReputation(guildId, giverId, giverName, receiverId, receiverName, reason, points = 1) {
     const monthKey = this.getCurrentMonthKey();
 
