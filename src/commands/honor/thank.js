@@ -72,26 +72,9 @@ module.exports = {
       });
     }
 
-    // 4. GIVER GENERAL COOLDOWN (1 Hour):
-    // After giving a star, you must wait 1 hour before you can give a star to another member
-    const callerDoc = await db.getUserHonorDoc(guildId, interaction.user.id);
-    const ONE_HOUR_MS = 1 * 60 * 60 * 1000; // 1 hour
-
-    if (callerDoc && callerDoc.last_given_at) {
-      const elapsedGiven = Date.now() - new Date(callerDoc.last_given_at).getTime();
-      if (elapsedGiven < ONE_HOUR_MS) {
-        const remainingGiven = ONE_HOUR_MS - elapsedGiven;
-        const minsRem = Math.floor(remainingGiven / 60000);
-        const secsRem = Math.floor((remainingGiven % 60000) / 1000);
-        return interaction.reply({
-          content: `⏳ **Giving Cooldown Active (1 Hour)!**\nYou recently awarded a star to someone.\nYou must wait **${minsRem}m ${secsRem}s** before you can give a star to another member.`,
-          ephemeral: true
-        });
-      }
-    }
-
-    // 5. SAME-PERSON COOLDOWN (8 Hours):
-    // If User A gave a star to User B, User A cannot give a star to User B again for 8 hours!
+    // 4. SAME-PERSON COOLDOWN (8 Hours):
+    // You cannot give a star to the SAME person twice within 8 hours!
+    // (You CAN give a star to any other member freely).
     const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000; // 8 hours
     const lastThankToTarget = await db.getLastThankTime(guildId, interaction.user.id, target.id);
     if (lastThankToTarget) {
@@ -101,13 +84,13 @@ module.exports = {
         const hoursRem = Math.floor(remTarget / (3600 * 1000));
         const minsRem = Math.floor((remTarget % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `⏳ **Recipient Cooldown (8 Hours)!**\nYou already gave a star to <@${target.id}> recently.\nYou cannot thank them again for **${hoursRem}h ${minsRem}m**.\n*(You can still thank other members who help you once your 1h timer ends).*`,
+          content: `⏳ **Same-Member Cooldown (8 Hours)!**\nYou already gave a star to <@${target.id}> recently.\nYou cannot thank them again for **${hoursRem}h ${minsRem}m**.\n*(You can freely thank any other member who helps you).*`,
           ephemeral: true
         });
       }
     }
 
-    // 6. MUTUAL TRADE LOCK (8 Hours):
+    // 5. MUTUAL TRADE LOCK (8 Hours):
     // If User B gave a star to User A, User A CANNOT give a star back to User B for 8 hours!
     const reverseThankTime = await db.getLastThankTime(guildId, target.id, interaction.user.id);
     if (reverseThankTime) {
@@ -117,7 +100,7 @@ module.exports = {
         const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
         const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `🚫 **Mutual Trade Lock (8 Hours)!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot give a star back to them for **${hoursRem}h ${minsRem}m**.\n*(You can still thank other members who help you).*`,
+          content: `🚫 **Mutual Trade Lock (8 Hours)!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot give a star back to them for **${hoursRem}h ${minsRem}m**.\n*(You can freely thank any other member who helps you).*`,
           ephemeral: true
         });
       }
@@ -125,7 +108,7 @@ module.exports = {
 
     await interaction.deferReply();
 
-    // 7. Process Star Award
+    // 6. Process Star Award
     const { monthlyPoints, totalPoints, previousMonthly } = await db.addReputation(
       guildId,
       interaction.user.id,
@@ -136,7 +119,7 @@ module.exports = {
       1
     );
 
-    // 8. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
+    // 7. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
     if (db.detectSuspiciousTrading) {
       const alertInfo = await db.detectSuspiciousTrading(guildId, interaction.user.id, target.id).catch(() => ({ isSuspicious: false }));
       if (alertInfo && alertInfo.isSuspicious) {
@@ -179,7 +162,7 @@ module.exports = {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // 9. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
+    // 8. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
       await syncMemberMilestoneRoles(
@@ -191,7 +174,7 @@ module.exports = {
       );
     }
 
-    // 10. Trigger instant real-time live leaderboard refresh
+    // 9. Trigger instant real-time live leaderboard refresh
     await updateLiveLeaderboard(interaction.client, db, guildId);
   }
 };
