@@ -3,6 +3,7 @@ const config = require('../../config');
 const { getMemberMilestoneInfo } = require('../../utils/stars');
 const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
+const { sendStarTransactionStaffLog } = require('../../services/adminAlerts');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -43,6 +44,17 @@ module.exports = {
       reason,
       stars
     );
+
+    // Send log to staff channel
+    await sendStarTransactionStaffLog(interaction.client, interaction.guild, {
+      giver: interaction.user,
+      receiver: target,
+      points: stars,
+      monthlyTotal: monthlyPoints,
+      totalPoints,
+      reason,
+      channel: interaction.channel
+    }).catch(() => null);
 
     const info = await getMemberMilestoneInfo(interaction.guild, monthlyPoints, db);
 

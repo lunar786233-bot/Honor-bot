@@ -6,7 +6,7 @@ const config = require('../../config');
 const { getMemberMilestoneInfo } = require('../../utils/stars');
 const { syncMemberMilestoneRoles } = require('../../services/starRoles');
 const { updateLiveLeaderboard } = require('../../services/liveLeaderboard');
-const { sendSuspiciousTradeAlert } = require('../../services/adminAlerts');
+const { sendSuspiciousTradeAlert, sendStarTransactionStaffLog } = require('../../services/adminAlerts');
 
 // Default thank channel requested: 1545036041583595562 (🫂・ᴛʜᴀɴᴋ)
 const DEFAULT_THANK_CHANNEL_ID = '1545036041583595562';
@@ -74,7 +74,6 @@ module.exports = {
 
     // 4. SAME-PERSON COOLDOWN (8 Hours):
     // You cannot give a star to the SAME person twice within 8 hours!
-    // (You CAN give a star to any other member freely).
     const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000; // 8 hours
     const lastThankToTarget = await db.getLastThankTime(guildId, interaction.user.id, target.id);
     if (lastThankToTarget) {
@@ -100,7 +99,7 @@ module.exports = {
         const hoursRem = Math.floor(remainingReverse / (3600 * 1000));
         const minsRem = Math.floor((remainingReverse % (3600 * 1000)) / (60 * 1000));
         return interaction.reply({
-          content: `🚫 **Mutual Trade Lock (8 Hours)!**\n<@${target.id}> gave you a star recently.\nTo prevent *"tum mujhe do, mai tumhe deta hu"* trading, you cannot give a star back to them for **${hoursRem}h ${minsRem}m**.\n*(You can freely thank any other member who helps you).*`,
+          content: `🚫 **Mutual Star Trading Protection!**\n<@${target.id}> gave you a star recently. To maintain system integrity, reciprocal star exchanges are locked for **${hoursRem}h ${minsRem}m**.\n\n⚠️ **Warning:** Engaging in mutual star trading, artificial star farming, or quid-pro-quo rings will result in an immediate **full reset of all your stars and milestone roles**.\n*(You can freely thank any other member who helps you).*`,
           ephemeral: true
         });
       }
@@ -119,7 +118,18 @@ module.exports = {
       1
     );
 
-    // 7. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
+    // 7. Send Real-Time Staff Log to Admin/Staff Channel (1318164139788468227)
+    await sendStarTransactionStaffLog(interaction.client, interaction.guild, {
+      giver: interaction.user,
+      receiver: target,
+      points: 1,
+      monthlyTotal: monthlyPoints,
+      totalPoints,
+      reason,
+      channel: interaction.channel
+    }).catch(err => console.error('Failed to send staff transaction log:', err));
+
+    // 8. Auto-Detection of Suspicious Trading Patterns -> Send Alert to Admin Channel (1318164139788468227)
     if (db.detectSuspiciousTrading) {
       const alertInfo = await db.detectSuspiciousTrading(guildId, interaction.user.id, target.id).catch(() => ({ isSuspicious: false }));
       if (alertInfo && alertInfo.isSuspicious) {
@@ -162,7 +172,7 @@ module.exports = {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // 8. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
+    // 9. Check if target reached any monthly milestone roles (and dispatch audit log to admin channel)
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
       await syncMemberMilestoneRoles(
@@ -174,7 +184,7 @@ module.exports = {
       );
     }
 
-    // 9. Trigger instant real-time live leaderboard refresh
+    // 10. Trigger instant real-time live leaderboard refresh
     await updateLiveLeaderboard(interaction.client, db, guildId);
   }
 };

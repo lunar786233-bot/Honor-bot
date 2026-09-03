@@ -4,6 +4,36 @@ const config = require('../config');
 const DEFAULT_ADMIN_ALERT_CHANNEL_ID = '1318164139788468227';
 
 /**
+ * Sends a real-time star transaction log to the staff channel whenever a member receives stars.
+ */
+async function sendStarTransactionStaffLog(client, guild, { giver, receiver, points = 1, monthlyTotal, totalPoints, reason, channel }) {
+  if (!guild || !client) return;
+
+  const alertChannel = await client.channels.fetch(DEFAULT_ADMIN_ALERT_CHANNEL_ID).catch(() => null)
+    || (guild.channels.cache.get(DEFAULT_ADMIN_ALERT_CHANNEL_ID));
+
+  if (!alertChannel) {
+    return;
+  }
+
+  const isPositive = points > 0;
+  const embed = new EmbedBuilder()
+    .setTitle(isPositive ? '⭐ Star Awarded — Staff Log' : '🔻 Star Penalty — Staff Log')
+    .setColor(isPositive ? 0x57F287 : 0xED4245)
+    .addFields(
+      { name: '👤 Giver', value: `${giver.toString()} (\`${giver.tag || giver.username}\` • ID: \`${giver.id}\`)`, inline: true },
+      { name: '🎯 Receiver', value: `${receiver.toString()} (\`${receiver.tag || receiver.username}\` • ID: \`${receiver.id}\`)`, inline: true },
+      { name: '⭐ Stars Given', value: `${isPositive ? '+' : ''}${points} ⭐ (Monthly: **${monthlyTotal}** • Lifetime: **${totalPoints}**)`, inline: true },
+      { name: '💬 Endorsement Note', value: `*"${reason}"*`, inline: false },
+      { name: '📍 Channel', value: channel ? channel.toString() : 'Unknown', inline: true }
+    )
+    .setFooter({ text: 'World Government Community Stars Staff Log' })
+    .setTimestamp();
+
+  await alertChannel.send({ embeds: [embed] }).catch(err => console.error('Failed to send staff transaction log:', err));
+}
+
+/**
  * Sends a high-priority alert to the admin alert channel when suspicious trading is detected.
  */
 async function sendSuspiciousTradeAlert(client, guild, { giver, receiver, reason, type, details }) {
@@ -24,8 +54,8 @@ async function sendSuspiciousTradeAlert(client, guild, { giver, receiver, reason
       `⚠️ **Warning:** The system has detected a potential star farming / trading pattern in **${guild.name}**.`
     )
     .addFields(
-      { name: '👤 Giver', value: `${giver.toString()} (\`${giver.tag}\` • ID: \`${giver.id}\`)`, inline: true },
-      { name: '🎯 Receiver', value: `${receiver.toString()} (\`${receiver.tag}\` • ID: \`${receiver.id}\`)`, inline: true },
+      { name: '👤 Giver', value: `${giver.toString()} (\`${giver.tag || giver.username}\` • ID: \`${giver.id}\`)`, inline: true },
+      { name: '🎯 Receiver', value: `${receiver.toString()} (\`${receiver.tag || receiver.username}\` • ID: \`${receiver.id}\`)`, inline: true },
       { name: '🔍 Detection Type', value: `\`${type}\``, inline: false },
       { name: '📋 Pattern Details', value: details, inline: false },
       { name: '💬 Endorsement Reason Given', value: `*"${reason}"*`, inline: false },
@@ -93,6 +123,7 @@ async function sendMilestoneRoleAuditAlert(client, guild, member, role, minStars
 
 module.exports = {
   DEFAULT_ADMIN_ALERT_CHANNEL_ID,
+  sendStarTransactionStaffLog,
   sendSuspiciousTradeAlert,
   sendMilestoneRoleAuditAlert
 };
