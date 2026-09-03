@@ -41,7 +41,8 @@ const HonorConfigSchema = new mongoose.Schema({
   reward_duration_days: { type: Number, default: 30 },
   winners_count: { type: Number, default: 1 },
   announcement_channel_id: { type: String, default: null },
-  cooldown_hours: { type: Number, default: 6 },
+  allowed_thank_channel_id: { type: String, default: null },
+  cooldown_hours: { type: Number, default: 24 },
   last_processed_month: { type: String, default: null },
   live_leaderboard_channel_id: { type: String, default: null },
   live_leaderboard_message_id: { type: String, default: null }

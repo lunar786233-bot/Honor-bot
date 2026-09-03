@@ -7,7 +7,6 @@ if (!global.crypto) {
 }
 
 const dns = require('dns');
-// Set public DNS servers to guarantee flawless SRV resolution on Windows
 try {
   dns.setServers(['8.8.8.8', '1.1.1.1']);
 } catch (e) {}
@@ -54,12 +53,13 @@ class MongoDBManager {
     return doc || null;
   }
 
-  async setHonorConfig(guildId, { rewardRoleId, durationDays, winnersCount, channelId, cooldownHours }) {
+  async setHonorConfig(guildId, { rewardRoleId, durationDays, winnersCount, channelId, thankChannelId, cooldownHours }) {
     const update = {};
     if (rewardRoleId !== undefined) update.reward_role_id = rewardRoleId ? String(rewardRoleId) : null;
     if (durationDays !== undefined) update.reward_duration_days = Number(durationDays);
     if (winnersCount !== undefined) update.winners_count = Number(winnersCount);
     if (channelId !== undefined) update.announcement_channel_id = channelId ? String(channelId) : null;
+    if (thankChannelId !== undefined) update.allowed_thank_channel_id = thankChannelId ? String(thankChannelId) : null;
     if (cooldownHours !== undefined) update.cooldown_hours = Number(cooldownHours);
 
     await HonorConfig.findOneAndUpdate(

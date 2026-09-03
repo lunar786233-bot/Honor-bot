@@ -46,7 +46,8 @@ class DBManager {
         reward_duration_days INTEGER DEFAULT 30,
         winners_count INTEGER DEFAULT 1,
         announcement_channel_id TEXT,
-        cooldown_hours INTEGER DEFAULT 6,
+        allowed_thank_channel_id TEXT,
+        cooldown_hours INTEGER DEFAULT 24,
         last_processed_month TEXT,
         live_leaderboard_channel_id TEXT,
         live_leaderboard_message_id TEXT
@@ -99,25 +100,27 @@ class DBManager {
     return stmt.get(String(guildId)) || null;
   }
 
-  setHonorConfig(guildId, { rewardRoleId, durationDays, winnersCount, channelId, cooldownHours }) {
+  setHonorConfig(guildId, { rewardRoleId, durationDays, winnersCount, channelId, thankChannelId, cooldownHours }) {
     const current = this.getHonorConfig(guildId);
     const roleToSave = rewardRoleId !== undefined ? (rewardRoleId ? String(rewardRoleId) : null) : (current ? current.reward_role_id : null);
     const daysToSave = durationDays !== undefined ? Number(durationDays) : (current ? current.reward_duration_days : 30);
     const winnersToSave = winnersCount !== undefined ? Number(winnersCount) : (current ? current.winners_count : 1);
     const channelToSave = channelId !== undefined ? (channelId ? String(channelId) : null) : (current ? current.announcement_channel_id : null);
-    const cooldownToSave = cooldownHours !== undefined ? Number(cooldownHours) : (current ? current.cooldown_hours : 6);
+    const thankChannelToSave = thankChannelId !== undefined ? (thankChannelId ? String(thankChannelId) : null) : (current ? current.allowed_thank_channel_id : null);
+    const cooldownToSave = cooldownHours !== undefined ? Number(cooldownHours) : (current ? current.cooldown_hours : 24);
 
     const stmt = this.db.prepare(`
-      INSERT INTO honor_config (guild_id, reward_role_id, reward_duration_days, winners_count, announcement_channel_id, cooldown_hours)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO honor_config (guild_id, reward_role_id, reward_duration_days, winners_count, announcement_channel_id, allowed_thank_channel_id, cooldown_hours)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(guild_id) DO UPDATE SET
         reward_role_id = excluded.reward_role_id,
         reward_duration_days = excluded.reward_duration_days,
         winners_count = excluded.winners_count,
         announcement_channel_id = excluded.announcement_channel_id,
+        allowed_thank_channel_id = excluded.allowed_thank_channel_id,
         cooldown_hours = excluded.cooldown_hours
     `);
-    stmt.run(String(guildId), roleToSave, daysToSave, winnersToSave, channelToSave, cooldownToSave);
+    stmt.run(String(guildId), roleToSave, daysToSave, winnersToSave, channelToSave, thankChannelToSave, cooldownToSave);
   }
 
   setLiveLeaderboard(guildId, channelId, messageId) {
